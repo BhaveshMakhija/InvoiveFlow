@@ -1,7 +1,7 @@
-# 🚀 Invoxa AI  
+# 🚀 InvoiceFlow  
 ### Intelligent Invoice Management Platform (MERN + Gemini AI)
 
-Invoxa AI is a modern, AI-powered invoice management system built using the **MERN stack (MongoDB, Express, React, Node.js)** and integrated with **Google Gemini AI** to enhance productivity and automate invoice-related tasks.
+InvoiceFlow is a modern, AI-powered invoice management system built using the **MERN stack (MongoDB, Express, React, Node.js)** and integrated with **Google Gemini AI** to enhance productivity and automate invoice-related tasks.
 
 This project demonstrates full-stack development, RESTful API architecture, database management, and real-world AI integration within a scalable SaaS-style application.
 
@@ -9,7 +9,7 @@ This project demonstrates full-stack development, RESTful API architecture, data
 
 ## 📌 Overview
 
-Invoxa AI enables businesses and freelancers to:
+InvoiceFlow enables businesses and freelancers to:
 
 - Create and manage invoices efficiently
 - Store invoice data securely in MongoDB

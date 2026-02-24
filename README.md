@@ -1,13 +1,13 @@
 InvoiceFlow
 Smart AI-Powered Invoice Management Platform
 
-Invoxa AI is a full-stack MERN application that streamlines invoice creation and management while integrating AI capabilities using Gemini to enhance productivity and automation.
+InvoiceFlow is a full-stack MERN application that streamlines invoice creation and management while integrating AI capabilities using Gemini to enhance productivity and automation.
 
 This project demonstrates modern SaaS architecture, RESTful API design, AI integration, and full-stack development using the MERN stack.
 
 🚀 Overview
 
-Invoxa AI is designed to help businesses and freelancers manage invoices efficiently while leveraging AI for smarter operations such as automated descriptions, invoice insights, and intelligent data handling.
+InvoiceFlow is designed to help businesses and freelancers manage invoices efficiently while leveraging AI for smarter operations such as automated descriptions, invoice insights, and intelligent data handling.
 
 The platform combines scalable backend architecture with a responsive frontend interface and AI-powered enhancements.
 

@@ -6,6 +6,7 @@ import { connectDB } from './config/db.js';
 import path from 'path';
 import invoiceRouter from './routes/invoiceRouter.js';
 import businessProfileRouter from './routes/bussinessProfileRouter.js';
+import aiInvoiceRouter from './routes/aiinvoiceRouter.js';
 
 dotenv.config({ path: './.env' }); // Explicit load of .env
 

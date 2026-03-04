@@ -2,12 +2,15 @@ import express from 'express';
 import multer from 'multer';
 import { clerkMiddleware } from '@clerk/express';
 import path from 'path';
-import {createBusinessProfile} from '../controllers/businessProfileController.js';
-
+import {
+  createBusinessProfile,
+  updateBusinessProfile,
+  getMyBusinessProfile,
+} from '../controllers/businessProfileController.js';
 
 const businessProfileRouter = express.Router();
 
-bussinessProfileRouter.use(clerkMiddleware());
+businessProfileRouter.use(clerkMiddleware());
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -18,28 +21,23 @@ const storage = multer.diskStorage({
     const ext = path.extname(file.originalname);
     cb(null, `business-${unique}${ext}`);
   }
-}); 
+});
 
 const upload = multer({ storage });
 
-//create 
-bussinessProfileRouter.post('/', 
-    upload.fields([{ name: 'logoNmae', maxCount: 1 },
-    { name: 'stampName', maxCount: 1 },
-    { name: 'signatureNameMeta', maxCount: 1 },
-    ]),
-    createBusinessProfile
-);
+const uploadFields = upload.fields([
+  { name: 'logoName', maxCount: 1 },
+  { name: 'stampName', maxCount: 1 },
+  { name: 'signatureNameMeta', maxCount: 1 },
+]);
 
-//to update 
-businessProfileRouter.put('/:id',
-    upload.fields([{ name: 'logoNmae', maxCount: 1 },
-    { name: 'stampName', maxCount: 1 }, 
-    { name: 'signatureNameMeta', maxCount: 1 },
-    ]),
-    createBusinessProfile
-);
+// create
+businessProfileRouter.post('/', uploadFields, createBusinessProfile);
 
-businessProfileRouter.get("/me", getbusinessProfile);
+// update
+businessProfileRouter.put('/:id', uploadFields, updateBusinessProfile);
+
+// get my profile
+businessProfileRouter.get('/me', getMyBusinessProfile);
 
 export default businessProfileRouter;

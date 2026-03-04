@@ -1,8 +1,6 @@
 import express from 'express';
-import {GoogleGenAI} from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
-import { json } from 'body-parser';
-
 
 dotenv.config();
 const aiInvoiceRouter = express.Router();
@@ -69,13 +67,11 @@ async function tryGenerateWithModel(modelName, prompt) {
       Array.isArray(response.output[0].content) &&
       response.output[0].content[0] &&
       response.output[0].content[0].text) ||
-    // alternate: response?.outputs?.[0]?.text
     (response &&
       response.outputs &&
       Array.isArray(response.outputs) &&
       response.outputs[0] &&
       (response.outputs[0].text || response.outputs[0].content)) ||
-    // fallback: JSON-stringify the whole response (so we at least have something)
     null;
 
   if (!text && response && Array.isArray(response.outputs)) {
@@ -108,142 +104,86 @@ async function tryGenerateWithModel(modelName, prompt) {
   return { text: String(text).trim(), modelName };
 }
 
-
-let lastErr = null;
-let lastText = null;
-let usedModel = null;
-
-for (const m of MODEL_CANDIDATES) {
-    try {
-    const { text, modelName } = await tryGenerateWithModel(m, fullPrompt);
-    lastText = text;
-    usedModel = modelName;
-    if (text && text.trim()) break;
-    } catch (err) {
-    console.warn(`Model ${m} failed:`, err?.message || err);
-    lastErr = err;
-    continue;
-    }
-}
-
-if (!lastText) {
-    const errMsg =
-    (lastErr && lastErr.message) ||
-    "All candidate models failed. Check API key, network, or model availability.";
-    console.error("AI generation failed (no text):", errMsg);
-    return res.status(502).json({
-    success: false,
-    message: "AI generation failed",
-    detail: errMsg
-    });
-}
-
-const text = lastText.trim();
-const firstBrace = text.indexOf("{");
-const lastBrace = text.lastIndexOf("}");
-if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
-    console.error("AI response did not contain JSON object:", {
-    usedModel,
-    text
-    });
-    return res.status(502).json({
-    success: false,
-    message: "AI returned malformed response (no JSON found)",
-    raw: text,
-    model: usedModel
-    });
-}
-
 aiInvoiceRouter.post('/generate', async (req, res) => {
-    try {
-        if (!API_KEY) {
-            return res.status(400).json({ success: false, message: "GEMINI_API_KEY not configured" });
-        }
-        const { prompt } = req.body;
-        if (!prompt || !prompt.trim()) {
-            return res.status(400).json({ success: false, message: "Invalid prompt" });
-        }
-
-        const fullPrompt = buildInvoicePrompt(prompt);
-            let lastErr = null;
-            let lastText = null;
-            let usedModel = null;
-
-            for (const m of MODEL_CANDIDATES) {
-            try {
-                    const { text, modelName } = await tryGenerateWithModel(m, fullPrompt);
-                    lastText = text;
-                    usedModel = modelName;
-                    if (text && text.trim()) break;
-                } catch (err) {
-                    console.warn(`Model ${m} failed:`, err?.message || err);
-                    lastErr = err;
-                    continue;
-                }
-            }
-
-            if (!lastText) {
-                const errMsg =
-                    (lastErr && lastErr.message) ||
-                    "All candidate models failed. Check API key, network, or model availability.";
-                console.error("AI generation failed (no text):", errMsg);
-                return res.status(502).json({
-                    success: false,
-                    message: "AI generation failed",
-                    detail: errMsg
-                });
-            }
-
-            const text = lastText.trim();
-            const firstBrace = text.indexOf("{");
-            const lastBrace = text.lastIndexOf("}");
-            if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
-                console.error("AI response did not contain JSON object:", {
-                usedModel,
-                text
-            });
-            return res.status(502).json({
-                success: false,
-                message: "AI returned malformed response (no JSON found)",
-                raw: text,
-                model: usedModel
-            });
-        }
-
-        const jsonText = text.slice(firstBrace, lastBrace + 1);
-        let data;
-        try {
-            data = JSON.parse(jsonText);
-        }     catch (parseErr) { 
-            console.error("Failed to parse AI response as JSON:", parseErr, {
-                model : usedModel,
-                jsonText
-                
-            });
-            return res.status(502).json({
-                success: false,
-                message: "AI returned Invalid JSON",
-                model : usedModel,
-                raw: text,
-                
-            });
-        }
-        return res.status(200).json({
-            success: true,
-            data,
-            model: usedModel
-        });
+  try {
+    if (!API_KEY) {
+      return res.status(400).json({ success: false, message: "GEMINI_API_KEY not configured" });
     }
-        catch (err) { 
-            console.error("Ai invoice generation error:", err);
-            return res.status(500).json({
-                success: false,
-                message: "Internal server error",
-                detail: err?.message || String(err)
-            });
+    const { prompt } = req.body;
+    if (!prompt || !prompt.trim()) {
+      return res.status(400).json({ success: false, message: "Invalid prompt" });
+    }
 
-        }
+    const fullPrompt = buildInvoicePrompt(prompt);
+    let lastErr = null;
+    let lastText = null;
+    let usedModel = null;
+
+    for (const m of MODEL_CANDIDATES) {
+      try {
+        const { text, modelName } = await tryGenerateWithModel(m, fullPrompt);
+        lastText = text;
+        usedModel = modelName;
+        if (text && text.trim()) break;
+      } catch (err) {
+        console.warn(`Model ${m} failed:`, err?.message || err);
+        lastErr = err;
+        continue;
+      }
+    }
+
+    if (!lastText) {
+      const errMsg =
+        (lastErr && lastErr.message) ||
+        "All candidate models failed. Check API key, network, or model availability.";
+      console.error("AI generation failed (no text):", errMsg);
+      return res.status(502).json({
+        success: false,
+        message: "AI generation failed",
+        detail: errMsg
+      });
+    }
+
+    const text = lastText.trim();
+    const firstBrace = text.indexOf("{");
+    const lastBrace = text.lastIndexOf("}");
+    if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+      console.error("AI response did not contain JSON object:", { usedModel, text });
+      return res.status(502).json({
+        success: false,
+        message: "AI returned malformed response (no JSON found)",
+        raw: text,
+        model: usedModel
+      });
+    }
+
+    const jsonText = text.slice(firstBrace, lastBrace + 1);
+    let data;
+    try {
+      data = JSON.parse(jsonText);
+    } catch (parseErr) {
+      console.error("Failed to parse AI response as JSON:", parseErr, { model: usedModel, jsonText });
+      return res.status(502).json({
+        success: false,
+        message: "AI returned Invalid JSON",
+        model: usedModel,
+        raw: text,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data,
+      model: usedModel
+    });
+  } catch (err) {
+    console.error("AI invoice generation error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      detail: err?.message || String(err)
+    });
+  }
 });
 
 export default aiInvoiceRouter;
-     

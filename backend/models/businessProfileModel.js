@@ -3,22 +3,22 @@ import mongoose from "mongoose";
 
 const BusinessProfileSchema = new mongoose.Schema({
     owner: { type: String, required: true, index: true },
-    businessName: { type: String, required: true }, 
-    email: { type: String, required: true, trim: true, lowercase: true, default: "" },
-    phone: { type: String, required: true, default: "" },
-    address: { type: String, required: true, default: "" },
-    gst: { type: String, required: true, default: "" },
+    businessName: { type: String, required: true },
+    email: { type: String, trim: true, lowercase: true, default: "" },
+    phone: { type: String, default: "" },
+    address: { type: String, default: "" },
+    gst: { type: String, default: "" },
 
     //for images 
-    logoUrl: { type: String,required: true, default: null },
-    stampUrl: { type: String, required: true, default: null },
-    signatureurl: { type: String, required: true, default: null },
+    logoUrl: { type: String, default: null },
+    stampUrl: { type: String, default: null },
+    signatureUrl: { type: String, default: null },
 
-    signatureOwnername: { type: String, required: true, default: "" },
-    signatureOwnerTitle: { type: String, required: true, default: "" },
+    signatureOwnerName: { type: String, default: "" },
+    signatureOwnerTitle: { type: String, default: "" },
 
-    defaultTaxPercent: { type: Number, required: true, default: 0 }
-}, { timestamps: true }); 
+    defaultTaxPercent: { type: Number, default: 0 }
+}, { timestamps: true });
 
 const BusinessProfile = mongoose.model.BusinessProfile || mongoose.model("BusinessProfile", BusinessProfileSchema);
 

@@ -6,6 +6,7 @@ import {
     createInvoice,
     updateInvoice,
     deleteInvoice,
+    sendInvoice,
 } from "../controllers/invoiceController.js";
 
 const invoiceRouter = express.Router();
@@ -17,5 +18,6 @@ invoiceRouter.get("/:id", getInvoiceById);
 invoiceRouter.post("/", createInvoice);
 invoiceRouter.put("/:id", updateInvoice);
 invoiceRouter.delete("/:id", deleteInvoice);
+invoiceRouter.post("/:id/send", sendInvoice);
 
 export default invoiceRouter;

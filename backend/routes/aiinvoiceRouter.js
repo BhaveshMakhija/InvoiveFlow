@@ -1,6 +1,8 @@
 import express from 'express';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
+import { getAuth } from '@clerk/express';
+import BusinessProfile from '../models/businessProfileModel.js';
 
 dotenv.config();
 const aiInvoiceRouter = express.Router();
@@ -18,7 +20,7 @@ const MODEL_CANDIDATES = [
   "gemini-2.0",
 ];
 
-function buildInvoicePrompt(promptText) {
+function buildInvoicePrompt(promptText, businessContext = "") {
   const invoiceTemplate = {
     invoiceNumber: `INV-${Math.floor(Math.random() * 9000) + 1000}`,
     issueDate: new Date().toISOString().slice(0, 10),
@@ -40,6 +42,8 @@ Task:
   - Analyze the user's input text and produce a valid JSON object only (no explanatory text).
   - The JSON MUST match the schema below (include all fields even if empty).
   - Ensure all dates are ISO 'YYYY-MM-DD' strings and numeric fields are numbers.
+
+${businessContext ? "User's Business Context (Use these details to fill 'from...' fields if not otherwise specified):\n" + businessContext + "\n" : ""}
 
 Schema:
 ${JSON.stringify(invoiceTemplate, null, 2)}
@@ -114,7 +118,23 @@ aiInvoiceRouter.post('/generate', async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid prompt" });
     }
 
-    const fullPrompt = buildInvoicePrompt(prompt);
+    const { userId } = getAuth(req) || {};
+    let businessContext = "";
+    if (userId) {
+      const profiles = await BusinessProfile.find({ owner: userId }).lean();
+      if (profiles && profiles.length > 0) {
+        businessContext = JSON.stringify(profiles.map(p => ({
+          BusinessName: p.businessName,
+          Email: p.email,
+          Address: p.address,
+          Phone: p.phone,
+          GST: p.gst,
+          TaxPercent: p.defaultTaxPercent,
+        })), null, 2);
+      }
+    }
+
+    const fullPrompt = buildInvoicePrompt(prompt, businessContext);
     let lastErr = null;
     let lastText = null;
     let usedModel = null;

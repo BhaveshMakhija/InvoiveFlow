@@ -47,8 +47,8 @@ export async function createBusinessProfile(req, res) {
         return res.status(201).json({ success: true, message: "Business profile created successfully", profile });
     }
     catch (err) {
-        console.error("Authentication error:", err);
-        return res.status(401).json({ success: false, message: "Unauthorized" });
+        console.error("createBusinessProfile server error:", err);
+        return res.status(500).json({ success: false, message: "Server error", error: err.message });
     }
 }
 
@@ -91,7 +91,7 @@ export async function updateBusinessProfile(req, res) {
     }
     catch (err) {
         console.error("UpdateBusinessProfile error:", err);
-        return res.status(401).json({ success: false, message: "Unauthorized" });
+        return res.status(500).json({ success: false, message: "Server error", error: err.message });
     }
 }
 
@@ -101,12 +101,11 @@ export async function getMyBusinessProfile(req, res) {
         const { userId } = getAuth(req);
         if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
 
-        const profile = await BusinessProfile.findOne({ owner: userId }).lean();
-        if (!profile) return res.status(204).json({ success: false, message: "Business profile not found" });
-        return res.status(200).json({ success: true, profile });
+        const profiles = await BusinessProfile.find({ owner: userId }).lean();
+        return res.status(200).json({ success: true, profiles, profile: profiles[0] || null });
     }
     catch (err) {
         console.error("GetMyBusinessProfile error:", err);
-        return res.status(401).json({ success: false, message: "Unauthorized" });
+        return res.status(500).json({ success: false, message: "Server error", error: err.message });
     }
 }

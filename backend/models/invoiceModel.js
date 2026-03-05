@@ -37,7 +37,7 @@ const InvoiceSchema = new mongoose.Schema({
         required: true,
         index: true
     },
-    issuedDate: {
+    issueDate: {
         type: String,
         required: true
     },
@@ -55,14 +55,17 @@ const InvoiceSchema = new mongoose.Schema({
 
     //for Client details
     client: {
-      name: { type: String, default: "" },
-      email: { type: String, default: "" },
-      address: { type: String, default: "" },
-      phone: { type: String, default: "" },
+        name: { type: String, default: "" },
+        email: { type: String, default: "" },
+        address: { type: String, default: "" },
+        phone: { type: String, default: "" },
     },
+
+    items: { type: [ItemSchema], default: [] },
 
     currency: { type: String, default: "INR" },
     status: { type: String, enum: ["draft", "unpaid", "paid", "overdue"], default: "draft" },
+    notes: { type: String, default: "" },
 
     //for Asset details
     logoDataUrl: { type: String, default: null },
@@ -77,8 +80,8 @@ const InvoiceSchema = new mongoose.Schema({
     subtotal: { type: Number, default: 0 },
     tax: { type: Number, default: 0 },
     total: { type: Number, default: 0 },
-    
-}, 
+
+},
     { timestamps: true }
 );
 

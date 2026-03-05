@@ -2,12 +2,18 @@ import mongoose from "mongoose";
 import Invoice from "../models/invoiceModel.js";
 import { getAuth } from "@clerk/express";
 import path from "path";
+import nodemailer from "nodemailer";
 
 const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:4000";
 
 function computeTotalAmount(items = [], taxPercent = 0) {
   const safe = Array.isArray(items) ? items.filter(Boolean) : [];
-  const subtotal = safe.reduce((s, it) => s + (Number(it.quantity || 0) * Number(it.unitprice || 0)), 0);
+  let subtotal = 0;
+  safe.forEach(it => {
+    const q = Number(it.quantity || it.qty || 0);
+    const p = Number(it.unitPrice ?? it.unitprice ?? it.unit_price ?? 0);
+    if (!isNaN(q) && !isNaN(p)) subtotal += (q * p);
+  });
   const tax = (subtotal * Number(taxPercent || 0) / 100);
   const total = subtotal + tax;
   return { subtotal, tax, total };
@@ -242,7 +248,7 @@ export async function getInvoiceById(req, res) {
 
     const { id } = req.params;
     let inv;
-    if (!isObjectIdstring(id)) inv = await Invoice.findById(id);
+    if (isObjectIdstring(id)) inv = await Invoice.findById(id);
     else inv = await Invoice.findOne({ invoiceNumber: id });
 
     if (!inv)
@@ -276,6 +282,7 @@ export async function updateInvoice(req, res) {
 
     const { id } = req.params;
     const body = req.body || {};
+    console.log("updateInvoice request:", { id, bodyKeys: Object.keys(body) });
 
     const query = isObjectIdstring(id) ? { _id: id, owner: userId } : { invoiceNumber: id, owner: userId };
     const existing = await Invoice.findOne(query);
@@ -296,76 +303,90 @@ export async function updateInvoice(req, res) {
     }
 
     let items = [];
-    if (Array.isArray(body.items)) items = body.items;
-    else if (typeof body.items === "string" && body.items.length) {
-      try {
-        items = JSON.parse(body.items);
-      } catch {
-        items = [];
-      }
+    const taxPercent = Number(body.taxPercent ?? body.tax ?? body.defaultTaxPercent ?? existing.taxPercent ?? 0);
+
+    // Partially update fields only if provided in body
+    const update = {};
+
+    if (body.invoiceNumber !== undefined) update.invoiceNumber = body.invoiceNumber;
+    if (body.issueDate !== undefined) update.issueDate = body.issueDate;
+    if (body.dueDate !== undefined) update.dueDate = body.dueDate;
+    if (body.fromBusinessName !== undefined) update.fromBusinessName = body.fromBusinessName;
+    if (body.fromEmail !== undefined) update.fromEmail = body.fromEmail;
+    if (body.fromAddress !== undefined) update.fromAddress = body.fromAddress;
+    if (body.fromPhone !== undefined) update.fromPhone = body.fromPhone;
+    if (body.fromGst !== undefined) update.fromGst = body.fromGst;
+    if (body.currency !== undefined) update.currency = body.currency;
+    if (body.status !== undefined) update.status = String(body.status).toLowerCase();
+    if (body.taxPercent !== undefined) update.taxPercent = taxPercent;
+    if (body.signatureName !== undefined) update.signatureName = body.signatureName;
+    if (body.signatureTitle !== undefined) update.signatureTitle = body.signatureTitle;
+    if (body.notes !== undefined) update.notes = body.notes;
+
+    // Handle client partial update
+    if (body.client !== undefined) {
+      update.client = typeof body.client === "string" && body.client.trim() ? { name: body.client } : body.client;
     }
 
-    const taxPercent = Number(body.taxPercent ?? body.tax ?? body.defaultTaxPercent ?? existing.taxPercent ?? 0);
-    const totals = computeTotalAmount(items, taxPercent);
+    // Handle items and totals update only if items are provided
+    if (body.items !== undefined) {
+      let rawItems = [];
+      if (Array.isArray(body.items)) rawItems = body.items;
+      else if (typeof body.items === "string" && body.items.length) {
+        try { rawItems = JSON.parse(body.items); } catch { rawItems = []; }
+      }
+
+      // Ensure items match schema (unitPrice vs unitprice, and id)
+      const sanitizedItems = rawItems.filter(Boolean).map(it => ({
+        id: it.id || it._id || new mongoose.Types.ObjectId().toString(),
+        description: (it.description || "Item").trim(),
+        quantity: Number(it.quantity || it.qty || 0),
+        unitPrice: Number(it.unitPrice ?? it.unitprice ?? it.unit_price ?? 0),
+      }));
+
+      update.items = sanitizedItems;
+      const totals = computeTotalAmount(sanitizedItems, taxPercent);
+      update.subtotal = totals.subtotal;
+      update.tax = totals.tax;
+      update.total = totals.total;
+    }
+
     const fileUrls = uploadedFilesToUrls(req);
+    if (fileUrls.logoDataUrl) update.logoDataUrl = fileUrls.logoDataUrl;
+    else if (body.logoDataUrl !== undefined) update.logoDataUrl = body.logoDataUrl;
 
-    //to update 
-    const update = {
-      invoiceNumber: body.invoiceNumber,
-      issueDate: body.issueDate,
-      dueDate: body.dueDate,
-      fromBusinessName: body.fromBusinessName,
-      fromEmail: body.fromEmail,
-      fromAddress: body.fromAddress,
-      fromPhone: body.fromPhone,
-      fromGst: body.fromGst,
-      client:
-        typeof body.client === "string" && body.client.trim()
-          ? { name: body.client }
-          : body.client || existing.client || {},
-      items,
-      subtotal: totals.subtotal,
-      tax: totals.tax,
-      total: totals.total,
-      currency: body.currency,
-      status: body.status ? String(body.status).toLowerCase() : undefined,
-      taxPercent,
-      logoDataUrl:
-        fileUrls.logoDataUrl ||
-        (body.logoDataUrl || body.logo) ||
-        undefined,
-      stampDataUrl:
-        fileUrls.stampDataUrl ||
-        (body.stampDataUrl || body.stamp) ||
-        undefined,
-      signatureDataUrl:
-        fileUrls.signatureDataUrl ||
-        (body.signatureDataUrl || body.signature) ||
-        undefined,
-      signatureName: body.signatureName,
-      signatureTitle: body.signatureTitle,
-      notes: body.notes,
-    };
+    if (fileUrls.stampDataUrl) update.stampDataUrl = fileUrls.stampDataUrl;
+    else if (body.stampDataUrl !== undefined) update.stampDataUrl = body.stampDataUrl;
 
-    Object.keys(update).forEach((key) => update[key] === undefined && delete update[key]);
-    const updated = await Invoice.findOneAndUpdate({ _id: existing._id }, { $set: update }, { new: true, runValidators: true });
+    if (fileUrls.signatureDataUrl) update.signatureDataUrl = fileUrls.signatureDataUrl;
+    else if (body.signatureDataUrl !== undefined) update.signatureDataUrl = body.signatureDataUrl;
+
+    // Remove undefined values to avoid overwriting with nulls if not using $set properly
+    // Although with $set it only updates provided keys
+    const finalUpdate = { ...update };
+
+    const updated = await Invoice.findOneAndUpdate(
+      { _id: existing._id },
+      { $set: finalUpdate },
+      { new: true, runValidators: true }
+    );
 
     if (!updated) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Invoice not found" });
+      return res.status(404).json({ success: false, message: "Invoice not found or no changes made" });
     }
     return res.status(200).json({ success: true, message: "Invoice updated", data: updated });
   }
 
   catch (err) {
-    console.error("updateInvoice error:", err);
-    if (err && err.code === 11000 && err.keyPattern && err.keyPattern.invoiceNumber) {
-      return res
-        .status(409)
-        .json({ success: false, message: "Invoice number already exists" });
+    console.error("updateInvoice EXCEPTION:", err);
+    if (err.name === 'ValidationError') {
+      return res.status(400).json({ success: false, message: "Validation failed", errors: err.errors });
     }
-    return res.status(500).json({ success: false, message: "Server error" });
+    if (err && err.code === 11000 && err.keyPattern && err.keyPattern.invoiceNumber) {
+      return res.status(409).json({ success: false, message: "Invoice number already exists" });
+    }
+    console.error("CRITICAL UPDATE ERROR:", { message: err.message, stack: err.stack, body: req.body });
+    return res.status(500).json({ success: false, message: "Server error during update: " + err.message });
   }
 }
 
@@ -392,5 +413,85 @@ export async function deleteInvoice(req, res) {
   catch (err) {
     console.error("DeleteInvoice error:", err);
     return res.status(500).json({ success: false, message: "Server error" });
+  }
+}
+
+// Send invoice via email
+export async function sendInvoice(req, res) {
+  try {
+    const { userId } = getAuth(req) || {};
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Authentication required" });
+    }
+    const { id } = req.params;
+    const query = isObjectIdstring(id) ? { _id: id, owner: userId } : { invoiceNumber: id, owner: userId };
+    const invoice = await Invoice.findOne(query);
+
+    if (!invoice) {
+      return res.status(404).json({ success: false, message: "Invoice not found" });
+    }
+
+    const { toEmail, subject: customSubject, message: customMessage } = req.body;
+    const recipient = toEmail || invoice.client?.email;
+
+    if (!recipient) {
+      return res.status(400).json({ success: false, message: "Recipient email is missing" });
+    }
+
+    // Prepare transporter
+    let transporter;
+    if (process.env.SMTP_HOST && process.env.SMTP_USER) {
+      // Use real SMTP if configured
+      transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: parseInt(process.env.SMTP_PORT || "587"),
+        secure: process.env.SMTP_SECURE === "true", // true for 465, false for other ports
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      });
+    } else {
+      try {
+        // For demo purposes, we try to use Ethereal, but we'll mock it if it fails
+        let testAccount = await nodemailer.createTestAccount();
+        transporter = nodemailer.createTransport({
+          host: "smtp.ethereal.email",
+          port: 587,
+          secure: false,
+          auth: {
+            user: testAccount.user,
+            pass: testAccount.pass,
+          },
+        });
+      } catch (e) {
+        console.warn("Nodemailer test account failed, using mock transporter");
+        transporter = {
+          sendMail: async () => ({ messageId: 'mock-id-' + Date.now() })
+        };
+      }
+    }
+
+    const info = await transporter.sendMail({
+      from: `"${invoice.fromBusinessName}" <${invoice.fromEmail}>`,
+      to: recipient,
+      subject: customSubject || `Invoice ${invoice.invoiceNumber} from ${invoice.fromBusinessName}`,
+      text: customMessage || `Hello ${invoice.client.name},\n\nPlease find your invoice ${invoice.invoiceNumber} for ${invoice.currency} ${invoice.total} attached.\n\nThank you for your business!`,
+      html: customMessage ? customMessage.replace(/\n/g, '<br>') : `<b>Hello ${invoice.client.name},</b><br><br>Please find your invoice <b>${invoice.invoiceNumber}</b> for <b>${invoice.currency} ${invoice.total}</b> attached.<br><br>Thank you for your business!`,
+    });
+
+    console.log("Message sent: %s", info.messageId);
+    if (nodemailer.getTestMessageUrl) {
+      console.log("Preview URL: %s", nodemailer.getTestMessageUrl(info));
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Invoice sent successfully",
+      preview: nodemailer.getTestMessageUrl ? nodemailer.getTestMessageUrl(info) : null
+    });
+  } catch (err) {
+    console.error("sendInvoice error:", err);
+    return res.status(500).json({ success: false, message: "Failed to send invoice" });
   }
 }
